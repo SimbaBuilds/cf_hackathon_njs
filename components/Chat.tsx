@@ -1,66 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { useChat } from '../hooks/useChat';
 
 export default function Chat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const { messages, input, setInput, isLoading, sendMessage } = useChat();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = input.trim();
-    console.log('[Chat] User submitted message:', userMessage);
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setIsLoading(true);
-
-    try {
-      console.log('[Chat] Sending request to /api/chat');
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
-      });
-
-      if (!response.ok) {
-        console.error('[Chat] API request failed:', response.status, response.statusText);
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('[Chat] Received response from API:', data);
-      
-      // Simplified response handling
-      let assistantMessage: string;
-      if (Array.isArray(data) && data.length > 0) {
-        // Take just the response string, ignore observation
-        assistantMessage = data[0];
-      } else if (typeof data === 'object' && data.response) {
-        assistantMessage = data.response;
-      } else {
-        console.error('[Chat] Unexpected response format:', data);
-        throw new Error('Unexpected response format from API');
-      }
-
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
-    } catch (error) {
-      console.error('[Chat] Error processing request:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, there was an error processing your request.' 
-      }]);
-    } finally {
-      setIsLoading(false);
-      console.log('[Chat] Request processing completed');
-    }
+    sendMessage(input.trim());
   };
 
   return (

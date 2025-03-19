@@ -8,64 +8,64 @@ export interface Message {
   type: 'text';
 }
 
-const userInteractionAgentPrompt = `
-You are a friendly and helpful AI assistant. Your role is to:
-1. Provide clear, concise, and natural responses to user messages
-2. Be conversational and engaging
-3. Keep responses focused and relevant to the user's input
-4. Avoid sharing internal thought processes or technical details
-5. If you need more information, ask specific questions
-6. Follow instructions given by a controller AI that performs actions and makes decisions
+const SpeakingAgentPrompt = `
+You are a friendly and helpful AI agent responsible for communicating with human users. Your role is to:
+1. Take the planner agent's analysis and any search results/observations
+2. Generate clear, concise, and natural responses that incorporate this information
+3. Be conversational and engaging
+4. Keep responses focused and relevant to the human user's input
+5. Avoid sharing internal thought processes or technical details
 
 You will receive input in this format:
-User Query: [The original user question]
-Context: [The controller agent's analysis and response]
-Search Results: [Optional search results from web searches]
+General Context: [The full conversation history]
+Planner Context: [The planner agent's analysis and any action results]
+Additional Context: [Optional results from web searches or other actions]
 
 Remember to:
 - Use the provided context and search results to inform your response
 - Be direct and clear in your responses
 - Keep responses concise and to the point
 - If the context contains relevant information, incorporate it naturally into your response
+- Maintain a helpful and professional tone
 `.trim();
 
-export class UserInteractionAgent {
+export class SpeakingAgent {
   private messages: Message[];
   private client: OpenAI | null = null;
 
-  constructor(system: string | Message[] = userInteractionAgentPrompt) {
-    console.log('[UserInteractionAgent] Initializing with system prompt');
+  constructor(system: string | Message[] = SpeakingAgentPrompt) {
+    console.log('[SpeakingAgent] Initializing with system prompt');
     this.messages = [];
 
     if (Array.isArray(system)) {
       this.messages = system;
-      console.log('[UserInteractionAgent] Initialized with message array');
+      console.log('[SpeakingAgent] Initialized with message array');
     } else if (typeof system === 'string' && system) {
       this.messages.push({
         role: 'system',
         content: system,
         type: 'text'
       });
-      console.log('[UserInteractionAgent] Initialized with system string');
+      console.log('[SpeakingAgent] Initialized with system string');
     }
   }
 
   private async getClient(): Promise<OpenAI> {
     if (!this.client) {
-      console.log('[UserInteractionAgent] Creating new OpenAI client');
+      console.log('[SpeakingAgent] Creating new OpenAI client');
       this.client = await getOpenAIClient();
     }
     return this.client;
   }
 
   async call(message: string | Message[]): Promise<string> {
-    console.log('[UserInteractionAgent] Processing new message');
+    console.log('[SpeakingAgent] Processing new message');
     if (Array.isArray(message)) {
       for (const msg of message) {
         if ('role' in msg && 'content' in msg && 'type' in msg) {
           this.messages.push(msg as Message);
         } else {
-          console.error('[UserInteractionAgent] Invalid message format:', msg);
+          console.error('[SpeakingAgent] Invalid message format:', msg);
           throw new Error("Each message must contain 'role', 'content', and 'type'.");
         }
       }
@@ -78,22 +78,27 @@ export class UserInteractionAgent {
     }
 
     const client = await this.getClient();
-    console.log('[UserInteractionAgent] Executing OpenAI request');
+    console.log('[SpeakingAgent] Executing OpenAI request');
     const completion = await client.chat.completions.create({
       model: "gpt-4o",
-      temperature: 0.7,
+      temperature: 1.0,
       messages: this.messages.map(({ role, content }) => ({ role, content }))
     });
     
     const result = completion.choices[0].message.content || '';
-    console.log('[UserInteractionAgent] Generated response:', result);
+    console.log('[SpeakingAgent] Generated response:', result);
     
     this.messages.push({
       role: 'assistant',
       content: result,
       type: 'text'
     });
-    console.log('[UserInteractionAgent] Message processed successfully');
+    console.log('[SpeakingAgent] Message processed successfully');
     return result;
+  }
+
+  // Add method to get conversation history
+  getMessages(): Message[] {
+    return [...this.messages];
   }
 }
