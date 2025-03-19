@@ -38,14 +38,12 @@ export default function Chat() {
       const data = await response.json();
       console.log('[Chat] Received response from API:', data);
       
-      // Handle both array and object response formats
+      // Simplified response handling
       let assistantMessage: string;
-      
       if (Array.isArray(data) && data.length > 0) {
-        // Handle array format from queryAgent
+        // Take just the response string, ignore observation
         assistantMessage = data[0];
       } else if (typeof data === 'object' && data.response) {
-        // Handle object format with response property
         assistantMessage = data.response;
       } else {
         console.error('[Chat] Unexpected response format:', data);

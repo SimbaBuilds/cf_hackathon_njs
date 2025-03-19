@@ -1,16 +1,12 @@
-import { DDGS } from 'duckduckgo-search';
 import { getOpenAIClient } from '../openai/openai_client';
 import { OpenAI } from 'openai';
+import { UserInteractionAgent, Message } from './user_interaction_agent';
 
 // Types
-export interface Message {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-  type: 'text';
-}
-
 interface SearchResult {
-  snippet: string;
+  title: string;
+  description: string;
+  url: string;
 }
 
 // Use unknown type since we don't need specific database functionality for now
@@ -124,7 +120,7 @@ class ControllerAgent {
     console.log('[ControllerAgent] Executing OpenAI request');
     const client = await this.getClient();
     const completion = await client.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       temperature: 0.7,
       messages: this.messages.map(({ role, content }) => ({ role, content }))
     });
@@ -133,83 +129,21 @@ class ControllerAgent {
   }
 }
 
-class UserInteractionAgent {
-  private messages: Message[];
-  private client: OpenAI | null = null;
-
-  constructor(system: string | Message[] = '') {
-    console.log('[UserInteractionAgent] Initializing');
-    this.messages = [];
-
-    if (Array.isArray(system)) {
-      this.messages = system;
-      console.log('[UserInteractionAgent] Initialized with message array');
-    } else if (typeof system === 'string' && system) {
-      this.messages.push({
-        role: 'system',
-        content: system,
-        type: 'text'
-      });
-      console.log('[UserInteractionAgent] Initialized with system string');
-    }
-  }
-
-  private async getClient(): Promise<OpenAI> {
-    if (!this.client) {
-      console.log('[UserInteractionAgent] Creating new OpenAI client');
-      this.client = await getOpenAIClient();
-    }
-    return this.client;
-  }
-
-  async call(message: string | Message[]): Promise<string> {
-    console.log('[UserInteractionAgent] Processing new message');
-    if (Array.isArray(message)) {
-      for (const msg of message) {
-        if ('role' in msg && 'content' in msg && 'type' in msg) {
-          this.messages.push(msg as Message);
-        } else {
-          console.error('[UserInteractionAgent] Invalid message format:', msg);
-          throw new Error("Each message must contain 'role', 'content', and 'type'.");
-        }
-      }
-    } else {
-      this.messages.push({
-        role: 'user',
-        content: message,
-        type: 'text'
-      });
-    }
-
-    const client = await this.getClient();
-    console.log('[UserInteractionAgent] Executing OpenAI request');
-    const completion = await client.chat.completions.create({
-      model: "gpt-4",
-      temperature: 0.7,
-      messages: this.messages.map(({ role, content }) => ({ role, content }))
-    });
-    
-    const result = completion.choices[0].message.content || '';
-    this.messages.push({
-      role: 'assistant',
-      content: result,
-      type: 'text'
-    });
-    console.log('[UserInteractionAgent] Message processed successfully');
-    return result;
-  }
-}
-
 async function webSearch(query: string): Promise<string> {
   console.log('[webSearch] Executing search for query:', query);
-  const ddgs = new DDGS();
-  const results = await ddgs.text(query, { maxResults: 5 });
-  console.log('[webSearch] Search completed, found results');
-  return (results as SearchResult[]).map(result => result.snippet).join('\n');
+  try {
+    const { search } = await import('duck-duck-scrape');
+    const results = await search(query);
+    console.log('[webSearch] Search completed, found results');
+    return results.results.map((result: SearchResult) => result.description).join('\n');
+  } catch (error) {
+    console.error('[webSearch] Error during search:', error);
+    throw error;
+  }
 }
 
 const knownActions: Record<string, (query: string, userId: string, db: Database) => Promise<string>> = {
-  'search the web': webSearch
+  'web_search': webSearch
 };
 
 const actionRegex = /^Action: (\w+): (.*)$/;
@@ -227,13 +161,11 @@ export async function queryAgent(
   const userAgent = new UserInteractionAgent();
   let nextPrompt = messages;
   let observation: string | null = null;
-  let finalResponse: string | null = null;
 
   while (i < maxTurns) {
     i++;
     console.log(`[queryAgent] Starting turn ${i}/${maxTurns}`);
     try {
-      // First, let the controller agent analyze and plan
       const controllerResult = await controllerAgent.call(nextPrompt);
       console.log('[queryAgent] Controller agent result:', controllerResult);
       
@@ -261,12 +193,12 @@ export async function queryAgent(
         }
       } else {
         console.log('[queryAgent] No actions needed, generating user response');
-        // If no actions are needed, let the user agent handle the response
-        // Pass both the original message and the controller's analysis
-        const userPrompt = `Original message: ${typeof messages === 'string' ? messages : messages[messages.length - 1].content}\n\nController's analysis: ${controllerResult}`;
-        finalResponse = await userAgent.call(userPrompt);
-        console.log('[queryAgent] User agent generated response:', finalResponse);
-        return [finalResponse, observation];
+        // Pass both the original message and the controller's response to the user agent
+        const userPrompt = typeof messages === 'string' 
+          ? `User Query: ${messages}\nContext: ${controllerResult}${observation ? `\nSearch Results: ${observation}` : ''}`
+          : `User Query: ${messages[messages.length - 1].content}\nContext: ${controllerResult}${observation ? `\nSearch Results: ${observation}` : ''}`;
+        const response = await userAgent.call(userPrompt);
+        return [response, observation];
       }
     } catch (e) {
       console.error('[queryAgent] Error in agent loop:', e);
