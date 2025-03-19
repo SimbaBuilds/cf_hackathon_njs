@@ -3,17 +3,25 @@
 import OpenAI from 'openai';
 
 // Debug logging
+console.log('Environment:', process.env.NODE_ENV);
+console.log('API Key exists:', !!process.env.OPENAI_API_KEY);
 console.log('API Key length:', process.env.OPENAI_API_KEY?.length);
 console.log('API Key prefix:', process.env.OPENAI_API_KEY?.substring(0, 10));
-console.log('API Key full:', process.env.OPENAI_API_KEY);
+console.log('All env vars:', Object.keys(process.env));
 
 if (!process.env.OPENAI_API_KEY) {
+  console.error('OPENAI_API_KEY is not set in environment variables');
   throw new Error('OPENAI_API_KEY is not set in environment variables');
 }
 
 // Verify the API key format
 const apiKey = process.env.OPENAI_API_KEY.trim();
+console.log('Trimmed API Key:', apiKey);
+console.log('API Key starts with sk-proj-:', apiKey.startsWith('sk-proj-'));
+
 if (!apiKey.startsWith('sk-proj-')) {
+  console.error('Invalid API key format. API key should start with "sk-proj-"');
+  console.error('Current API key starts with:', apiKey.substring(0, 10));
   throw new Error('Invalid API key format. API key should start with "sk-proj-"');
 }
 
