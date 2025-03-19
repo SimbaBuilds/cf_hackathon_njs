@@ -61,5 +61,5 @@ out/
 *.swp
 *.swo
 
-
-env.local
+# Next.js config
+next.config.ts
