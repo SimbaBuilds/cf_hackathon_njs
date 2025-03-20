@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { Message } from '../lib/agents/speaking-agent';
-import { AgentOrchestrator } from '../lib/agents/agent-orchestrator';
 
-interface ChatMessage extends Omit<Message, 'type'> {
+interface ChatMessage {
   role: 'user' | 'assistant';
+  content: string;
 }
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const orchestrator = new AgentOrchestrator();
 
   const sendMessage = async (userMessage: string) => {
     if (!userMessage.trim() || isLoading) return;
@@ -24,15 +22,23 @@ export function useChat() {
     setIsLoading(true);
 
     try {
-      console.log('[Chat] Processing message with AgentOrchestrator');
-      const { response } = await orchestrator.chat(
-        userMessage,
-        messages.map(msg => ({ ...msg, type: 'text' as const }))
-      );
+      console.log('[Chat] Sending request to API');
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: [...messages, { role: 'user', content: userMessage }] }),
+      });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: response 
+        content: data.response 
       }]);
     } catch (error) {
       console.error('[Chat] Error processing request:', error);
