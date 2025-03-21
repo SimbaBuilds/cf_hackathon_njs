@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { sendChatMessage } from '../lib/services/endpoints/chat';
 
 interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
+  type: 'text' | 'image';
 }
 
 export function useChat() {
@@ -15,36 +17,30 @@ export function useChat() {
 
     console.log('[Chat] User submitted message:', userMessage);
     setInput('');
-    setMessages(prev => [...prev, { 
-      role: 'user', 
-      content: userMessage 
-    }]);
     setIsLoading(true);
+
+    const newUserMessage: ChatMessage = {
+      role: 'user',
+      content: userMessage,
+      type: 'text'
+    };
+    const updatedMessages = [...messages, newUserMessage];
+    setMessages(updatedMessages);
 
     try {
       console.log('[Chat] Sending request to API');
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: [...messages, { role: 'user', content: userMessage }] }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: data.response 
+      const data = await sendChatMessage(updatedMessages);
+      setMessages(messages => [...messages, { 
+        role: 'assistant',
+        content: data.response,
+        type: 'text'
       }]);
     } catch (error) {
       console.error('[Chat] Error processing request:', error);
       setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, there was an error processing your request.' 
+        role: 'assistant',
+        content: 'Sorry, there was an error processing your request.',
+        type: 'text'
       }]);
     } finally {
       setIsLoading(false);
