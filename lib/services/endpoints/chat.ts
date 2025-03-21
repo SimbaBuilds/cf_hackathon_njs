@@ -6,8 +6,6 @@ interface ChatMessage {
 
 interface ChatRequest {
   messages: ChatMessage[];
-  provider?: string;
-  model?: string;
 }
 
 interface ChatResponse {
@@ -15,14 +13,19 @@ interface ChatResponse {
 }
 
 export async function sendChatMessage(messages: ChatMessage[]): Promise<ChatResponse> {
+  // Ensure messages have only the exact fields expected by the backend
+  const formattedMessages = messages.map(msg => ({
+    role: msg.role,
+    content: msg.content,
+    type: msg.type || 'text'  // Ensure type defaults to 'text' if missing
+  }));
+
   const chatRequest: ChatRequest = {
-    messages: messages.map(msg => ({
-      ...msg,
-      type: 'text' // Default to text type since that's what we're handling
-    })),
-    provider: 'openai', // Using the default from Python
-    model: 'gpt-4o'    // Using the default from Python
+    messages: formattedMessages
   };
+
+  console.log('Sending chat request:', JSON.stringify(chatRequest, null, 2));
+
 
   const response = await fetch(`${process.env.NEXT_PUBLIC_PYTHON_API_URL}/chat`, {
     method: 'POST',
@@ -33,7 +36,10 @@ export async function sendChatMessage(messages: ChatMessage[]): Promise<ChatResp
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const errorText = await response.text();
+    console.error('Chat API error:', errorText);
+    console.error('Request that caused error:', JSON.stringify(chatRequest, null, 2));
+    throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
   }
 
   return response.json();
